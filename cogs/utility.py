@@ -389,6 +389,7 @@ class Utility(commands.Cog):
     @app_commands.command(name="announcement", description="Create and send a styled announcement")
     @app_commands.describe(
         channel="Channel to send the announcement",
+        send_ping="Enable mentions in the posted announcement",
         ping_everyone="Mention @everyone in the announcement",
         ping_here="Mention @here in the announcement",
         ping_role="Role to mention in the announcement",
@@ -402,6 +403,7 @@ class Utility(commands.Cog):
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel,
+        send_ping: bool = False,
         ping_everyone: bool = False,
         ping_here: bool = False,
         ping_role: Optional[discord.Role] = None,
@@ -411,12 +413,13 @@ class Utility(commands.Cog):
     ):
         """Open a modal to build and post an announcement embed."""
         mention_parts = []
-        if ping_everyone:
-            mention_parts.append('@everyone')
-        if ping_here:
-            mention_parts.append('@here')
-        if ping_role is not None:
-            mention_parts.append(ping_role.mention)
+        if send_ping:
+            if ping_everyone:
+                mention_parts.append('@everyone')
+            if ping_here:
+                mention_parts.append('@here')
+            if ping_role is not None:
+                mention_parts.append(ping_role.mention)
 
         mention_content = ' '.join(mention_parts)
 
