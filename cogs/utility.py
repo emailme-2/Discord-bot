@@ -70,6 +70,12 @@ class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
         max_length=2048,
         required=False,
     )
+    image_input = discord.ui.TextInput(
+        label="Image URL (optional)",
+        placeholder="https://example.com/banner.png",
+        max_length=1024,
+        required=False,
+    )
 
     def __init__(
         self,
@@ -78,7 +84,6 @@ class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
         requested_by: Union[discord.Member, discord.User],
         show_author: bool,
         show_timestamp: bool,
-        use_server_thumbnail: bool,
     ):
         super().__init__()
         self.target_channel = target_channel
@@ -86,7 +91,6 @@ class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
         self.requested_by = requested_by
         self.show_author = show_author
         self.show_timestamp = show_timestamp
-        self.use_server_thumbnail = use_server_thumbnail
 
     async def on_submit(self, interaction: discord.Interaction):
         color = parse_embed_color(str(self.color_input))
@@ -113,8 +117,16 @@ class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
         if footer_text:
             embed.set_footer(text=footer_text)
 
-        if self.use_server_thumbnail and interaction.guild and interaction.guild.icon:
-            embed.set_thumbnail(url=interaction.guild.icon.url)
+        image_url = str(self.image_input).strip()
+        if image_url:
+            if image_url.startswith(('http://', 'https://')):
+                embed.set_image(url=image_url)
+            else:
+                await interaction.response.send_message(
+                    "Image URL must start with http:// or https://",
+                    ephemeral=True,
+                )
+                return
 
         try:
             sent_message = await self.target_channel.send(
@@ -395,7 +407,6 @@ class Utility(commands.Cog):
         ping_role="Role to mention in the announcement",
         show_author="Show who posted the announcement",
         show_timestamp="Show timestamp on the announcement",
-        use_server_thumbnail="Show server icon thumbnail",
     )
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -409,7 +420,6 @@ class Utility(commands.Cog):
         ping_role: Optional[discord.Role] = None,
         show_author: bool = False,
         show_timestamp: bool = True,
-        use_server_thumbnail: bool = True,
     ):
         """Open a modal to build and post an announcement embed."""
         mention_parts = []
@@ -437,7 +447,6 @@ class Utility(commands.Cog):
             requested_by=interaction.user,
             show_author=show_author,
             show_timestamp=show_timestamp,
-            use_server_thumbnail=use_server_thumbnail,
         )
         await interaction.response.send_modal(modal)
 
