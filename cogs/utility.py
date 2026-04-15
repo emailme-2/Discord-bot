@@ -1,6 +1,6 @@
 import platform
 import sys
-from typing import Optional
+from typing import Optional, Union
 
 import discord
 from discord import app_commands
@@ -81,7 +81,7 @@ class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
         self,
         target_channel: discord.TextChannel,
         mention_content: str,
-        requested_by: discord.Member | discord.User,
+        requested_by: Union[discord.Member, discord.User],
     ):
         super().__init__()
         self.target_channel = target_channel

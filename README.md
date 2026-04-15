@@ -47,6 +47,21 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## PebbleHost Deployment
+
+Use these settings in PebbleHost to run the bot reliably:
+
+- Startup command: `python main.py`
+- Python version: 3.10+ recommended
+- Install command: `pip install -r requirements.txt`
+- Environment variable: `DISCORD_TOKEN=your_real_bot_token`
+
+Notes:
+
+- The bot now prefers `DISCORD_TOKEN` from environment variables.
+- Keep `config.json` token empty or placeholder in production.
+- Make sure Privileged Gateway Intents are enabled in Discord Developer Portal (Message Content and Server Members), since this bot uses both.
+
 ## Available Commands
 
 ### Utility Cog

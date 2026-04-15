@@ -44,8 +44,8 @@ bot = commands.Bot(
     help_command=None
 )
 
-# Get bot token from config or environment
-TOKEN = config.get('token') or os.getenv('DISCORD_TOKEN')
+# Get bot token from environment first (best for hosted platforms like PebbleHost)
+TOKEN = (os.getenv('DISCORD_TOKEN') or config.get('token') or '').strip()
 
 
 async def update_roster_message(guild: discord.Guild, reason: str):
@@ -233,7 +233,7 @@ async def main():
 
 if __name__ == '__main__':
     if not TOKEN or TOKEN == 'your_bot_token_here':
-        logger.error('DISCORD token not set in config.json or DISCORD_TOKEN environment variable!')
+        logger.error('Discord token not set. Configure DISCORD_TOKEN in environment variables for PebbleHost.')
         exit(1)
 
     import asyncio
