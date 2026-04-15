@@ -101,6 +101,7 @@ async def load_cogs():
 @bot.event
 async def on_ready():
     """Called when the bot is ready."""
+    bot.start_time = discord.utils.utcnow()
     logger.info('Logged in as %s (ID: %s)', bot.user, bot.user.id)
     logger.info('------')
 
