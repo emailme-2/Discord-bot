@@ -1,5 +1,6 @@
 import platform
 import sys
+from typing import Optional
 
 import discord
 from discord import app_commands
@@ -7,6 +8,144 @@ from discord.ext import commands
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def parse_embed_color(raw_value: str) -> Optional[discord.Color]:
+    """Parse a user-provided color string into a discord.Color."""
+    if not raw_value:
+        return discord.Color.gold()
+
+    value = raw_value.strip().lower()
+    named_colors = {
+        'red': discord.Color.red(),
+        'green': discord.Color.green(),
+        'blue': discord.Color.blue(),
+        'gold': discord.Color.gold(),
+        'orange': discord.Color.orange(),
+        'purple': discord.Color.purple(),
+        'teal': discord.Color.teal(),
+        'magenta': discord.Color.magenta(),
+        'dark_blue': discord.Color.dark_blue(),
+        'dark_green': discord.Color.dark_green(),
+    }
+
+    if value in named_colors:
+        return named_colors[value]
+
+    hex_value = value.lstrip('#')
+    if len(hex_value) == 6:
+        try:
+            return discord.Color(int(hex_value, 16))
+        except ValueError:
+            return None
+
+    return None
+
+
+class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
+    """Modal used to collect announcement embed content."""
+
+    title_input = discord.ui.TextInput(
+        label="Title",
+        placeholder="Enter announcement title...",
+        max_length=256,
+        required=True,
+    )
+    description_input = discord.ui.TextInput(
+        label="Description",
+        placeholder="Write your announcement details...",
+        style=discord.TextStyle.paragraph,
+        max_length=4000,
+        required=True,
+    )
+    color_input = discord.ui.TextInput(
+        label="Color (hex or name)",
+        placeholder="Examples: #FFD700, gold, red, blue",
+        max_length=32,
+        required=False,
+    )
+    footer_input = discord.ui.TextInput(
+        label="Footer (optional)",
+        placeholder="Footer text for the embed",
+        max_length=2048,
+        required=False,
+    )
+    image_input = discord.ui.TextInput(
+        label="Image URL (optional)",
+        placeholder="https://example.com/image.png",
+        max_length=1024,
+        required=False,
+    )
+
+    def __init__(
+        self,
+        target_channel: discord.TextChannel,
+        mention_content: str,
+        requested_by: discord.Member | discord.User,
+    ):
+        super().__init__()
+        self.target_channel = target_channel
+        self.mention_content = mention_content
+        self.requested_by = requested_by
+
+    async def on_submit(self, interaction: discord.Interaction):
+        color = parse_embed_color(str(self.color_input))
+        if color is None:
+            await interaction.response.send_message(
+                "Invalid color. Use a 6-digit hex like #FFD700 or a basic name like gold/red/blue.",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(
+            title=str(self.title_input),
+            description=str(self.description_input),
+            color=color,
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.set_author(
+            name=f"Announcement from {self.requested_by.display_name}",
+            icon_url=self.requested_by.display_avatar.url,
+        )
+
+        footer_text = str(self.footer_input).strip()
+        if footer_text:
+            embed.set_footer(text=footer_text)
+
+        image_url = str(self.image_input).strip()
+        if image_url:
+            if image_url.startswith(('http://', 'https://')):
+                embed.set_image(url=image_url)
+            else:
+                await interaction.response.send_message(
+                    "Image URL must start with http:// or https://",
+                    ephemeral=True,
+                )
+                return
+
+        if interaction.guild and interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
+
+        try:
+            sent_message = await self.target_channel.send(
+                content=self.mention_content or None,
+                embed=embed,
+            )
+            await interaction.response.send_message(
+                f"Announcement sent in {self.target_channel.mention}: {sent_message.jump_url}",
+                ephemeral=True,
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I do not have permission to send messages in that channel.",
+                ephemeral=True,
+            )
+        except discord.HTTPException as error:
+            logger.error("Failed to send announcement: %s", error)
+            await interaction.response.send_message(
+                "Failed to send the announcement due to a Discord API error.",
+                ephemeral=True,
+            )
 
 class Utility(commands.Cog):
     """Utility commands for the bot"""
@@ -224,6 +363,7 @@ class Utility(commands.Cog):
                 "`/ping` - Check bot latency\n"
                 "`/info` - Get bot information\n"
                 "`/help` - Show this help message\n"
+                "`/announcement` - Open announcement builder (Manage Server)\n"
                 "`/echo` - Echo a message"
             ),
             inline=False
@@ -255,6 +395,64 @@ class Utility(commands.Cog):
     async def echo_slash(self, interaction: discord.Interaction, message: str):
         """Echo a message"""
         await interaction.response.send_message(message)
+
+    @app_commands.command(name="announcement", description="Create and send a styled announcement")
+    @app_commands.describe(
+        channel="Channel to send the announcement",
+        ping_everyone="Mention @everyone in the announcement",
+        ping_here="Mention @here in the announcement",
+        ping_role="Role to mention in the announcement",
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def announcement_slash(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        ping_everyone: bool = False,
+        ping_here: bool = False,
+        ping_role: Optional[discord.Role] = None,
+    ):
+        """Open a modal to build and post an announcement embed."""
+        mention_parts = []
+        if ping_everyone:
+            mention_parts.append('@everyone')
+        if ping_here:
+            mention_parts.append('@here')
+        if ping_role is not None:
+            mention_parts.append(ping_role.mention)
+
+        mention_content = ' '.join(mention_parts)
+
+        perms = channel.permissions_for(interaction.guild.me) if interaction.guild else None
+        if perms and (not perms.send_messages or not perms.embed_links):
+            await interaction.response.send_message(
+                f"I need Send Messages and Embed Links in {channel.mention}.",
+                ephemeral=True,
+            )
+            return
+
+        modal = AnnouncementModal(
+            target_channel=channel,
+            mention_content=mention_content,
+            requested_by=interaction.user,
+        )
+        await interaction.response.send_modal(modal)
+
+    @announcement_slash.error
+    async def announcement_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Handle permission errors for announcement command."""
+        if isinstance(error, app_commands.errors.MissingPermissions):
+            await interaction.response.send_message(
+                "You need Manage Server permission to use this command.",
+                ephemeral=True,
+            )
+            return
+        logger.error("Unexpected announcement command error: %s", error)
+        if interaction.response.is_done():
+            await interaction.followup.send("Something went wrong while opening the announcement form.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Something went wrong while opening the announcement form.", ephemeral=True)
 
 async def setup(bot):
     """Setup function to load the cog"""
