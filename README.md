@@ -55,6 +55,7 @@ Use these settings in PebbleHost to run the bot reliably:
 - Python version: 3.10+ recommended
 - Install command: `pip install -r requirements.txt`
 - Environment variable: `DISCORD_TOKEN=your_real_bot_token`
+- Optional for YouTube on restricted IPs: `YTDLP_COOKIES_FILE=/home/container/cookies.txt`
 
 Notes:
 
@@ -62,6 +63,8 @@ Notes:
 - Keep `config.json` token empty or placeholder in production.
 - Make sure Privileged Gateway Intents are enabled in Discord Developer Portal (Message Content and Server Members), since this bot uses both.
 - Music commands require FFmpeg. If PebbleHost does not expose ffmpeg in PATH, set `FFMPEG_PATH` to your ffmpeg binary path.
+- If YouTube returns "Sign in to confirm you're not a bot", upload a `cookies.txt` file and set `YTDLP_COOKIES_FILE`.
+- Use Python 3.10+ in PebbleHost. Python 3.9 is deprecated by some dependencies.
 
 ## Available Commands
 

@@ -9,6 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import yt_dlp
+from yt_dlp.utils import DownloadError
 
 logger = logging.getLogger(__name__)
 
@@ -48,25 +49,49 @@ class Music(commands.Cog):
             return custom_path
         return shutil.which("ffmpeg")
 
-    async def extract_track(self, query: str) -> Optional[Track]:
-        query = query.strip()
-        if not query:
-            return None
-
-        ytdl_options = {
+    def get_ytdl_options(self) -> dict:
+        options = {
             "format": "bestaudio/best",
             "noplaylist": True,
             "default_search": "ytsearch",
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
+            # Helps on some hosts where the default client gets challenged.
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"],
+                }
+            },
         }
+
+        cookies_file = os.getenv("YTDLP_COOKIES_FILE", "").strip()
+        if cookies_file:
+            options["cookiefile"] = cookies_file
+
+        return options
+
+    async def extract_track(self, query: str) -> Optional[Track]:
+        query = query.strip()
+        if not query:
+            return None
+
+        ytdl_options = self.get_ytdl_options()
 
         def blocking_extract() -> dict:
             with yt_dlp.YoutubeDL(ytdl_options) as ydl:
                 return ydl.extract_info(query, download=False)
 
-        info = await asyncio.to_thread(blocking_extract)
+        try:
+            info = await asyncio.to_thread(blocking_extract)
+        except DownloadError as error:
+            message = str(error)
+            if "Sign in to confirm you" in message or "not a bot" in message:
+                raise RuntimeError(
+                    "YouTube blocked this request. Add a cookies.txt file and set YTDLP_COOKIES_FILE, "
+                    "or try a different video/search query."
+                ) from error
+            raise RuntimeError("yt-dlp could not load this track.") from error
 
         if "entries" in info:
             entries = [entry for entry in info.get("entries", []) if entry]
@@ -174,23 +199,54 @@ class Music(commands.Cog):
         voice_channel = interaction.user.voice.channel
         voice_client = interaction.guild.voice_client
 
-        try:
-            if voice_client and voice_client.channel != voice_channel:
-                await voice_client.move_to(voice_channel)
-            elif not voice_client:
-                voice_client = await voice_channel.connect(self_deaf=True)
-        except discord.Forbidden:
-            await interaction.followup.send(
-                "I do not have permission to join or speak in that voice channel.",
-                ephemeral=True,
-            )
-            return
-        except discord.ClientException:
-            await interaction.followup.send("Could not connect to that voice channel.", ephemeral=True)
-            return
+        for attempt in range(2):
+            try:
+                voice_client = interaction.guild.voice_client
+                if voice_client and voice_client.channel != voice_channel:
+                    await voice_client.move_to(voice_channel)
+                elif not voice_client:
+                    voice_client = await voice_channel.connect(self_deaf=True, reconnect=True, timeout=20.0)
+                break
+            except discord.errors.ConnectionClosed as error:
+                logger.warning("Voice websocket closed while connecting (attempt %s): %s", attempt + 1, error)
+                stale = interaction.guild.voice_client
+                if stale:
+                    try:
+                        await stale.disconnect(force=True)
+                    except Exception:
+                        pass
+
+                if attempt == 1:
+                    await interaction.followup.send(
+                        "Voice connection failed (Discord code 4006). Try again in a few seconds.",
+                        ephemeral=True,
+                    )
+                    return
+                await asyncio.sleep(1)
+            except asyncio.TimeoutError:
+                if attempt == 1:
+                    await interaction.followup.send(
+                        "Voice connection timed out. Please try /play again.",
+                        ephemeral=True,
+                    )
+                    return
+                await asyncio.sleep(1)
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    "I do not have permission to join or speak in that voice channel.",
+                    ephemeral=True,
+                )
+                return
+            except discord.ClientException:
+                await interaction.followup.send("Could not connect to that voice channel.", ephemeral=True)
+                return
 
         try:
             track = await self.extract_track(query)
+        except RuntimeError as error:
+            logger.error("yt-dlp extraction failed: %s", error)
+            await interaction.followup.send(str(error), ephemeral=True)
+            return
         except Exception as error:
             logger.error("yt-dlp extraction failed: %s", error)
             await interaction.followup.send("Could not load that YouTube track.", ephemeral=True)
