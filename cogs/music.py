@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import shutil
+import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -49,6 +50,27 @@ class Music(commands.Cog):
             return custom_path
         return shutil.which("ffmpeg")
 
+    def get_music_unavailable_reason(self) -> Optional[str]:
+        if not self.is_supported_voice_runtime():
+            return "Music is unavailable on this host right now. PebbleHost is running Python 3.13; switch to Python 3.11 or 3.12 for voice support."
+
+        if not self.get_ffmpeg_executable():
+            return "Music is unavailable because FFmpeg is not installed. Add FFmpeg or set FFMPEG_PATH in PebbleHost."
+
+        if not self.get_cookies_file():
+            return "Music is unavailable because YouTube cookies are not configured. Upload cookies.txt and set YTDLP_COOKIES_FILE in PebbleHost."
+
+        return None
+
+    def get_cookies_file(self) -> Optional[str]:
+        cookies_file = os.getenv("YTDLP_COOKIES_FILE", "").strip()
+        if cookies_file and os.path.exists(cookies_file):
+            return cookies_file
+        return None
+
+    def is_supported_voice_runtime(self) -> bool:
+        return sys.version_info < (3, 13)
+
     def get_ytdl_options(self) -> dict:
         options = {
             "format": "bestaudio/best",
@@ -65,7 +87,7 @@ class Music(commands.Cog):
             },
         }
 
-        cookies_file = os.getenv("YTDLP_COOKIES_FILE", "").strip()
+        cookies_file = self.get_cookies_file()
         if cookies_file:
             options["cookiefile"] = cookies_file
 
@@ -186,14 +208,12 @@ class Music(commands.Cog):
             await interaction.response.send_message("Join a voice channel first.", ephemeral=True)
             return
 
-        ffmpeg_path = self.get_ffmpeg_executable()
-        if not ffmpeg_path:
-            await interaction.response.send_message(
-                "FFmpeg is missing. On PebbleHost, add FFmpeg or set FFMPEG_PATH to your ffmpeg binary.",
-                ephemeral=True,
-            )
+        unavailable_reason = self.get_music_unavailable_reason()
+        if unavailable_reason:
+            await interaction.response.send_message(unavailable_reason, ephemeral=True)
             return
 
+        ffmpeg_path = self.get_ffmpeg_executable()
         await interaction.response.defer(thinking=True)
 
         voice_channel = interaction.user.voice.channel

@@ -44,6 +44,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+if sys.version_info >= (3, 13):
+    logger.warning('Python 3.13 detected. Discord voice/music is not reliable in this setup; use Python 3.11 or 3.12 on PebbleHost.')
+
 # Initialize bot
 intents = discord.Intents.default()
 intents.message_content = True
