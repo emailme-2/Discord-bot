@@ -205,7 +205,7 @@ class Music(commands.Cog):
                 if voice_client and voice_client.channel != voice_channel:
                     await voice_client.move_to(voice_channel)
                 elif not voice_client:
-                    voice_client = await voice_channel.connect(self_deaf=True, reconnect=True, timeout=20.0)
+                    voice_client = await voice_channel.connect(self_deaf=True, reconnect=False, timeout=12.0)
                 break
             except discord.errors.ConnectionClosed as error:
                 logger.warning("Voice websocket closed while connecting (attempt %s): %s", attempt + 1, error)
@@ -218,7 +218,7 @@ class Music(commands.Cog):
 
                 if attempt == 1:
                     await interaction.followup.send(
-                        "Voice connection failed (Discord code 4006). Try again in a few seconds.",
+                        "Voice connection failed (Discord code 4006). This is usually a host voice networking issue; try Python 3.11/3.12 and retry.",
                         ephemeral=True,
                     )
                     return
@@ -239,6 +239,10 @@ class Music(commands.Cog):
                 return
             except discord.ClientException:
                 await interaction.followup.send("Could not connect to that voice channel.", ephemeral=True)
+                return
+            except Exception as error:
+                logger.error("Unexpected voice connection error: %s", error)
+                await interaction.followup.send("Unexpected error while connecting to voice.", ephemeral=True)
                 return
 
         try:

@@ -66,6 +66,7 @@ Notes:
 - If YouTube returns "Sign in to confirm you're not a bot", upload a `cookies.txt` file and set `YTDLP_COOKIES_FILE`.
 - Use Python 3.10 to 3.12 when possible.
 - Python 3.13 removes `audioop`; this project includes a fallback via `audioop-lts` for voice support.
+- If voice repeatedly fails with Discord close code `4006`, switch the server runtime to Python 3.11/3.12 and restart. On some low-cost hosts this can also indicate temporary voice networking limits.
 
 ## Available Commands
 
