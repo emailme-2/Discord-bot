@@ -61,6 +61,7 @@ Notes:
 - The bot now prefers `DISCORD_TOKEN` from environment variables.
 - Keep `config.json` token empty or placeholder in production.
 - Make sure Privileged Gateway Intents are enabled in Discord Developer Portal (Message Content and Server Members), since this bot uses both.
+- Music commands require FFmpeg. If PebbleHost does not expose ffmpeg in PATH, set `FFMPEG_PATH` to your ffmpeg binary path.
 
 ## Available Commands
 
@@ -73,6 +74,11 @@ Notes:
 - `!kick <member> [reason]` - Kick a member
 - `!ban <member> [reason]` - Ban a member
 - `!clear [amount]` - Clear messages (default: 10)
+
+### Music Cog (Slash Commands)
+- `/play <query>` - Play a YouTube URL or search term
+- `/skip` - Skip current track
+- `/stop` - Stop playback, clear queue, disconnect bot
 
 ### Roster Cog
 - `!roster` - Display the organization roster with members organized by role

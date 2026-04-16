@@ -372,6 +372,16 @@ class Utility(commands.Cog):
         )
 
         embed.add_field(
+            name="🎵 Music Commands",
+            value=(
+                "`/play` - Play YouTube URL or search\n"
+                "`/skip` - Skip current song\n"
+                "`/stop` - Stop music and clear queue"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
             name="📝 Logging Setup (Admin)",
             value=(
                 "`/set_chat_log_channel` - Set channel for message edit/delete logs\n"
