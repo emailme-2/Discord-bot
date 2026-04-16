@@ -1,7 +1,18 @@
 import json
 import logging
 import os
+import sys
 from pathlib import Path
+
+# Python 3.13 removed audioop from stdlib; discord.py voice still imports it.
+try:
+    import audioop  # type: ignore
+except ModuleNotFoundError:
+    try:
+        import audioop_lts as audioop  # type: ignore
+        sys.modules['audioop'] = audioop
+    except ModuleNotFoundError:
+        pass
 
 import discord
 from discord.ext import commands

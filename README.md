@@ -64,7 +64,8 @@ Notes:
 - Make sure Privileged Gateway Intents are enabled in Discord Developer Portal (Message Content and Server Members), since this bot uses both.
 - Music commands require FFmpeg. If PebbleHost does not expose ffmpeg in PATH, set `FFMPEG_PATH` to your ffmpeg binary path.
 - If YouTube returns "Sign in to confirm you're not a bot", upload a `cookies.txt` file and set `YTDLP_COOKIES_FILE`.
-- Use Python 3.10+ in PebbleHost. Python 3.9 is deprecated by some dependencies.
+- Use Python 3.10 to 3.12 when possible.
+- Python 3.13 removes `audioop`; this project includes a fallback via `audioop-lts` for voice support.
 
 ## Available Commands
 
