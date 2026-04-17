@@ -123,7 +123,12 @@ async def on_ready():
     # Sync slash commands
     try:
         synced = await bot.tree.sync()
-        logger.info(f'Synced {len(synced)} slash commands')
+        logger.info('Synced %s global slash commands', len(synced))
+
+        for guild in bot.guilds:
+            bot.tree.copy_global_to(guild=guild)
+            guild_synced = await bot.tree.sync(guild=guild)
+            logger.info('Synced %s guild slash commands for %s (%s)', len(guild_synced), guild.name, guild.id)
     except Exception as e:
         logger.error(f'Failed to sync slash commands: {e}')
 
