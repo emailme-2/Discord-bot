@@ -60,7 +60,15 @@ class Moderation(commands.Cog):
             color=discord.Color.orange()
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
-        logger.info(f'Cleared {len(deleted)} messages in {interaction.channel}')
+        logger.info(
+            'Cleared %s messages in #%s (%s) in guild %s by %s (%s)',
+            len(deleted),
+            interaction.channel,
+            interaction.channel_id,
+            interaction.guild_id,
+            interaction.user,
+            interaction.user.id,
+        )
 
 async def setup(bot):
     """Setup function to load the cog"""

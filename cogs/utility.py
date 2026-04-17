@@ -1,5 +1,7 @@
+import json
 import platform
 import sys
+from pathlib import Path
 from typing import Optional, Union
 
 import discord
@@ -8,6 +10,7 @@ from discord.ext import commands
 import logging
 
 logger = logging.getLogger(__name__)
+CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config.json'
 
 
 def parse_embed_color(raw_value: str) -> Optional[discord.Color]:
@@ -154,6 +157,15 @@ class Utility(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
+
+    def _get_bot_version(self) -> str:
+        try:
+            with CONFIG_PATH.open('r', encoding='utf-8') as config_file:
+                config = json.load(config_file)
+        except (OSError, json.JSONDecodeError):
+            return '1.0.0'
+
+        return str(config.get('bot', {}).get('version') or '1.0.0')
     
     @app_commands.command(name="ping", description="Check bot latency")
     async def ping_slash(self, interaction: discord.Interaction):
@@ -183,6 +195,7 @@ class Utility(commands.Cog):
         # discord.py version
         dpy_version = discord.__version__
         py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        bot_version = self._get_bot_version()
 
         # ── BOT EMBED ──────────────────────────────────────────────
         bot_embed = discord.Embed(
@@ -207,6 +220,7 @@ class Utility(commands.Cog):
         bot_embed.add_field(name="📦 discord.py", value=f"v{dpy_version}", inline=True)
         bot_embed.add_field(name="🐍 Python", value=f"v{py_version}", inline=True)
         bot_embed.add_field(name="💻 Platform", value=platform.system(), inline=True)
+        bot_embed.add_field(name="🏷️ Bot Version", value=f"v{bot_version}", inline=True)
 
         bot_embed.add_field(
             name="⚙️ Features",
@@ -323,6 +337,21 @@ class Utility(commands.Cog):
             await interaction.response.send_message(embeds=[bot_embed, server_embed])
         else:
             await interaction.response.send_message(embed=bot_embed)
+
+    @app_commands.command(name="version", description="Show the current bot version")
+    async def version_slash(self, interaction: discord.Interaction):
+        """Show the current bot version."""
+        bot_version = self._get_bot_version()
+        embed = discord.Embed(
+            title="Royal Family Bot Version",
+            description=f"Current bot version: **v{bot_version}**",
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow(),
+        )
+        if self.bot.user:
+            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Update config.json to change the displayed version")
+        await interaction.response.send_message(embed=embed)
     
     @app_commands.command(name="help", description="Show available slash commands")
     async def help_slash(self, interaction: discord.Interaction):
@@ -364,6 +393,7 @@ class Utility(commands.Cog):
             value=(
                 "`/ping` - Check bot latency\n"
                 "`/info` - Get bot information\n"
+                "`/version` - Show the current bot version\n"
                 "`/help` - Show this help message\n"
                 "`/announcement` - Fully customizable announcement builder (Manage Server)\n"
                 "`/echo` - Echo a message"

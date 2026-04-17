@@ -73,6 +73,7 @@ Notes:
 ### Utility Cog
 - `!ping` - Check bot latency
 - `!info` - Get bot information
+- `/version` - Show the current bot version
 - `!echo <message>` - Echo a message
 
 ### Moderation Cog
@@ -190,6 +191,7 @@ All changes are saved to `config.json` automatically.
 Edit `config.json` to customize:
 
 - **prefix**: Command prefix (default: `!`)
+- **version**: Bot version shown by `/version` and `/info`
 - **activity_type**: `playing`, `watching`, or `listening`
 - **activity_text**: Status text
 - **features**: Enable/disable specific features

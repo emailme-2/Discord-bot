@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -170,6 +171,66 @@ class BotLogging(commands.Cog):
             return None
         return await self._find_audit_entry(guild, action, **kwargs)
 
+    async def _find_message_delete_audit_entry(
+        self,
+        guild: discord.Guild,
+        *,
+        channel_id: int,
+        target_id: Optional[int] = None,
+        attempts: int = 3,
+        delay_seconds: float = 0.75,
+    ) -> Optional[discord.AuditLogEntry]:
+        for attempt in range(attempts):
+            entry = await self._find_audit_entry(
+                guild,
+                discord.AuditLogAction.message_delete,
+                target_id=target_id,
+                channel_id=channel_id,
+                limit=12,
+                max_age_seconds=20,
+            )
+            if entry:
+                return entry
+
+            if attempt < attempts - 1:
+                await asyncio.sleep(delay_seconds)
+
+        return None
+
+    async def _find_bulk_message_delete_audit_entry(
+        self,
+        guild: discord.Guild,
+        *,
+        channel_id: int,
+        deleted_count: Optional[int] = None,
+        attempts: int = 3,
+        delay_seconds: float = 0.75,
+    ) -> Optional[discord.AuditLogEntry]:
+        for attempt in range(attempts):
+            entry = await self._find_audit_entry(
+                guild,
+                discord.AuditLogAction.message_bulk_delete,
+                channel_id=channel_id,
+                limit=12,
+                max_age_seconds=20,
+            )
+            if entry:
+                audit_count = getattr(getattr(entry, 'extra', None), 'count', None)
+                if deleted_count is None or audit_count is None or audit_count >= deleted_count:
+                    return entry
+
+            if attempt < attempts - 1:
+                await asyncio.sleep(delay_seconds)
+
+        return None
+
+    def _message_delete_actor_label(self, entry: Optional[discord.AuditLogEntry], *, raw: bool = False) -> str:
+        if entry and entry.user:
+            return self._member_label(entry.user)
+        if raw:
+            return 'Unknown (message not cached and no matching audit log entry found)'
+        return 'Self-deleted or unknown (no matching audit log entry found)'
+
     def _add_audit_fields(
         self,
         embed: discord.Embed,
@@ -290,9 +351,8 @@ class BotLogging(commands.Cog):
             return
 
         channel = self._get_log_channel(message.guild, 'chat_channel')
-        audit_entry = await self._find_audit_entry(
+        audit_entry = await self._find_message_delete_audit_entry(
             message.guild,
-            discord.AuditLogAction.message_delete,
             target_id=message.author.id,
             channel_id=message.channel.id,
         )
@@ -308,14 +368,13 @@ class BotLogging(commands.Cog):
 
         if audit_entry:
             delete_count = getattr(getattr(audit_entry, 'extra', None), 'count', None)
-            deleted_by = self._member_label(audit_entry.user) if audit_entry.user else 'Unknown'
-            embed.add_field(name='🗑️ Deleted By', value=deleted_by, inline=False)
+            embed.add_field(name='🗑️ Deleted By', value=self._message_delete_actor_label(audit_entry), inline=False)
             if audit_entry.reason:
                 embed.add_field(name='📝 Reason', value=self._truncate(audit_entry.reason), inline=False)
             if delete_count is not None:
                 embed.add_field(name='📊 Recent Deletes By Moderator', value=str(delete_count), inline=True)
         else:
-            embed.add_field(name='🗑️ Deleted By', value='Self-deleted (no audit log entry)', inline=False)
+            embed.add_field(name='🗑️ Deleted By', value=self._message_delete_actor_label(audit_entry), inline=False)
 
         embed.add_field(name='💬 Content', value=self._truncate(message.content or 'No content'), inline=False)
         embed.add_field(
@@ -340,10 +399,10 @@ class BotLogging(commands.Cog):
             return
 
         channel = self._get_log_channel(first_message.guild, 'chat_channel')
-        audit_entry = await self._find_audit_entry(
+        audit_entry = await self._find_bulk_message_delete_audit_entry(
             first_message.guild,
-            discord.AuditLogAction.message_bulk_delete,
             channel_id=first_message.channel.id,
+            deleted_count=len(messages),
         )
 
         samples = []
@@ -375,9 +434,8 @@ class BotLogging(commands.Cog):
             return
 
         channel = self._get_log_channel(guild, 'chat_channel')
-        audit_entry = await self._find_audit_entry(
+        audit_entry = await self._find_message_delete_audit_entry(
             guild,
-            discord.AuditLogAction.message_delete,
             channel_id=payload.channel_id,
         )
 
@@ -391,7 +449,9 @@ class BotLogging(commands.Cog):
         embed.add_field(name='📍 Channel', value=channel_label, inline=False)
         embed.add_field(name='🆔 Message ID', value=str(payload.message_id), inline=True)
         embed.add_field(name='💬 Content', value='Message was not cached, so content is unavailable.', inline=False)
-        self._add_audit_fields(embed, audit_entry, actor_name='🗑️ Deleted By')
+        embed.add_field(name='🗑️ Deleted By', value=self._message_delete_actor_label(audit_entry, raw=True), inline=False)
+        if audit_entry and audit_entry.reason:
+            embed.add_field(name='📝 Reason', value=self._truncate(audit_entry.reason), inline=False)
 
         await self._send_embed(channel, embed)
 
@@ -405,10 +465,10 @@ class BotLogging(commands.Cog):
             return
 
         channel = self._get_log_channel(guild, 'chat_channel')
-        audit_entry = await self._find_audit_entry(
+        audit_entry = await self._find_bulk_message_delete_audit_entry(
             guild,
-            discord.AuditLogAction.message_bulk_delete,
             channel_id=payload.channel_id,
+            deleted_count=len(payload.message_ids),
         )
 
         source_channel = guild.get_channel(payload.channel_id)
@@ -421,7 +481,9 @@ class BotLogging(commands.Cog):
         embed.add_field(name='📍 Channel', value=channel_label, inline=False)
         embed.add_field(name='🧮 Messages Removed', value=str(len(payload.message_ids)), inline=True)
         embed.add_field(name='🆔 Message IDs', value=self._truncate(', '.join(str(message_id) for message_id in list(payload.message_ids)[:15]) or 'Unknown'), inline=False)
-        self._add_audit_fields(embed, audit_entry, actor_name='🗑️ Deleted By')
+        embed.add_field(name='🗑️ Deleted By', value=self._message_delete_actor_label(audit_entry, raw=True), inline=False)
+        if audit_entry and audit_entry.reason:
+            embed.add_field(name='📝 Reason', value=self._truncate(audit_entry.reason), inline=False)
 
         await self._send_embed(channel, embed)
 
