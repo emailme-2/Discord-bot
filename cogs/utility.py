@@ -166,6 +166,30 @@ class Utility(commands.Cog):
             return '1.0.0'
 
         return str(config.get('bot', {}).get('version') or '1.0.0')
+
+    def _build_version_embed(self) -> discord.Embed:
+        bot_version = self._get_bot_version()
+        embed = discord.Embed(
+            title="Royal Family Bot Version",
+            description=f"Current bot version: **v{bot_version}**",
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow(),
+        )
+        if self.bot.user:
+            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Update config.json to change the displayed version")
+        return embed
+
+    async def _sync_commands(self) -> dict[str, int]:
+        sync_helper = getattr(self.bot, 'sync_application_commands', None)
+        if callable(sync_helper):
+            return await sync_helper()
+
+        synced = await self.bot.tree.sync()
+        return {
+            'global': len(synced),
+            'guilds': 0,
+        }
     
     @app_commands.command(name="ping", description="Check bot latency")
     async def ping_slash(self, interaction: discord.Interaction):
@@ -341,17 +365,21 @@ class Utility(commands.Cog):
     @app_commands.command(name="version", description="Show the current bot version")
     async def version_slash(self, interaction: discord.Interaction):
         """Show the current bot version."""
-        bot_version = self._get_bot_version()
-        embed = discord.Embed(
-            title="Royal Family Bot Version",
-            description=f"Current bot version: **v{bot_version}**",
-            color=discord.Color.gold(),
-            timestamp=discord.utils.utcnow(),
+        await interaction.response.send_message(embed=self._build_version_embed())
+
+    @commands.command(name="version", aliases=["ver"])
+    async def version_prefix(self, ctx: commands.Context):
+        """Show the current bot version with a text command fallback."""
+        await ctx.send(embed=self._build_version_embed())
+
+    @commands.command(name="sync")
+    @commands.has_permissions(administrator=True)
+    async def sync_prefix(self, ctx: commands.Context):
+        """Manually sync slash commands for the current startup."""
+        result = await self._sync_commands()
+        await ctx.send(
+            f"Synced {result.get('global', 0)} global slash commands across {result.get('guilds', 0)} guild sync target(s)."
         )
-        if self.bot.user:
-            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text="Update config.json to change the displayed version")
-        await interaction.response.send_message(embed=embed)
     
     @app_commands.command(name="help", description="Show available slash commands")
     async def help_slash(self, interaction: discord.Interaction):

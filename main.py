@@ -58,9 +58,32 @@ bot = commands.Bot(
     intents=intents,
     help_command=None
 )
+bot.command_sync_completed = False
 
 # Get bot token from environment first (best for hosted platforms like PebbleHost)
 TOKEN = (os.getenv('DISCORD_TOKEN') or config.get('token') or '').strip()
+
+
+async def sync_application_commands() -> dict[str, int]:
+    """Sync global and guild application commands and log the results."""
+    synced = await bot.tree.sync()
+    command_names = ', '.join(sorted(command.name for command in synced)) or 'none'
+    logger.info('Synced %s global slash commands: %s', len(synced), command_names)
+
+    guild_sync_counts: dict[str, int] = {}
+    for guild in bot.guilds:
+        bot.tree.copy_global_to(guild=guild)
+        guild_synced = await bot.tree.sync(guild=guild)
+        guild_sync_counts[str(guild.id)] = len(guild_synced)
+        logger.info('Synced %s guild slash commands for %s (%s)', len(guild_synced), guild.name, guild.id)
+
+    return {
+        'global': len(synced),
+        'guilds': len(guild_sync_counts),
+    }
+
+
+bot.sync_application_commands = sync_application_commands
 
 
 async def update_roster_message(guild: discord.Guild, reason: str):
@@ -116,21 +139,18 @@ async def load_cogs():
 @bot.event
 async def on_ready():
     """Called when the bot is ready."""
-    bot.start_time = discord.utils.utcnow()
+    if not getattr(bot, 'start_time', None):
+        bot.start_time = discord.utils.utcnow()
+
     logger.info('Logged in as %s (ID: %s)', bot.user, bot.user.id)
     logger.info('------')
 
-    # Sync slash commands
-    try:
-        synced = await bot.tree.sync()
-        logger.info('Synced %s global slash commands', len(synced))
-
-        for guild in bot.guilds:
-            bot.tree.copy_global_to(guild=guild)
-            guild_synced = await bot.tree.sync(guild=guild)
-            logger.info('Synced %s guild slash commands for %s (%s)', len(guild_synced), guild.name, guild.id)
-    except Exception as e:
-        logger.error(f'Failed to sync slash commands: {e}')
+    if not bot.command_sync_completed:
+        try:
+            await sync_application_commands()
+            bot.command_sync_completed = True
+        except Exception as e:
+            logger.error('Failed to sync slash commands: %s', e)
 
     activity_type = config['bot'].get('activity_type', '').lower()
     activity_text = config['bot'].get('activity_text', '')
