@@ -305,20 +305,24 @@ class BotLogging(commands.Cog):
         embed.add_field(name='📍 Channel', value=message.channel.mention, inline=True)
         embed.add_field(name='🆔 Message ID', value=str(message.id), inline=True)
         embed.add_field(name='🕒 Sent', value=self._safe_format_dt(message.created_at), inline=True)
+
+        if audit_entry:
+            delete_count = getattr(getattr(audit_entry, 'extra', None), 'count', None)
+            deleted_by = self._member_label(audit_entry.user) if audit_entry.user else 'Unknown'
+            embed.add_field(name='🗑️ Deleted By', value=deleted_by, inline=False)
+            if audit_entry.reason:
+                embed.add_field(name='📝 Reason', value=self._truncate(audit_entry.reason), inline=False)
+            if delete_count is not None:
+                embed.add_field(name='📊 Recent Deletes By Moderator', value=str(delete_count), inline=True)
+        else:
+            embed.add_field(name='🗑️ Deleted By', value='Self-deleted (no audit log entry)', inline=False)
+
         embed.add_field(name='💬 Content', value=self._truncate(message.content or 'No content'), inline=False)
         embed.add_field(
             name='📎 Attachments',
             value=self._truncate(self._attachment_lines(message.attachments), 1024),
             inline=False,
         )
-
-        if audit_entry:
-            delete_count = getattr(getattr(audit_entry, 'extra', None), 'count', None)
-            self._add_audit_fields(embed, audit_entry, actor_name='🗑️ Deleted By')
-            if delete_count is not None:
-                embed.add_field(name='📊 Recent Deletes', value=str(delete_count), inline=True)
-        else:
-            embed.add_field(name='🗑️ Deleted By', value='Unknown or self-deleted', inline=False)
 
         image_url = self._first_image_url(message.attachments)
         if image_url:
@@ -559,22 +563,23 @@ class BotLogging(commands.Cog):
         if before.channel != after.channel:
             if before.channel is None and after.channel is not None:
                 embed.title = '🎙️ Voice Channel Joined'
-                changes.append(f'Joined: {self._channel_label(after.channel)}')
+                embed.add_field(name='📢 Joined Channel', value=self._channel_label(after.channel), inline=False)
             elif before.channel is not None and after.channel is None:
-                embed.title = '📤 Voice Channel Left'
-                changes.append(f'Left: {self._channel_label(before.channel)}')
                 audit_entry = await self._find_optional_audit_entry(
                     member.guild,
                     'member_disconnect',
                     target_id=member.id,
                 )
                 if audit_entry:
-                    embed.title = '🔌 Voice Disconnected'
+                    embed.title = '🔌 Voice Disconnected (by Moderator)'
                     actor_name = '🔌 Disconnected By'
+                else:
+                    embed.title = '📤 Voice Channel Left'
+                embed.add_field(name='📢 Left Channel', value=self._channel_label(before.channel), inline=False)
             else:
                 embed.title = '🔁 Voice Channel Moved'
-                changes.append(f'From: {self._channel_label(before.channel)}')
-                changes.append(f'To: {self._channel_label(after.channel)}')
+                embed.add_field(name='📢 From Channel', value=self._channel_label(before.channel), inline=False)
+                embed.add_field(name='📢 To Channel', value=self._channel_label(after.channel), inline=False)
                 audit_entry = await self._find_optional_audit_entry(
                     member.guild,
                     'member_move',
@@ -613,10 +618,13 @@ class BotLogging(commands.Cog):
                 target_id=member.id,
             )
 
-        if not changes:
+        channel_changed = before.channel != after.channel
+
+        if not changes and not channel_changed:
             return
 
-        embed.add_field(name='🔍 Changes', value=self._truncate('\n'.join(f'• {change}' for change in changes), 1024), inline=False)
+        if changes:
+            embed.add_field(name='🔍 State Changes', value=self._truncate('\n'.join(f'• {change}' for change in changes), 1024), inline=False)
         self._add_audit_fields(embed, audit_entry, actor_name=actor_name)
         await self._send_embed(channel, embed)
 
