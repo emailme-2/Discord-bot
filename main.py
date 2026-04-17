@@ -86,21 +86,19 @@ TOKEN = (os.getenv('DISCORD_TOKEN') or config.get('token') or '').strip()
 
 
 async def sync_application_commands() -> dict[str, int]:
-    """Sync global and guild application commands and log the results."""
+    """Sync global application commands and clear any stale guild-specific overrides."""
+    # Clear guild-specific command copies so they don't duplicate global commands
+    for guild in bot.guilds:
+        bot.tree.clear_commands(guild=guild)
+        await bot.tree.sync(guild=guild)
+
     synced = await bot.tree.sync()
     command_names = ', '.join(sorted(command.name for command in synced)) or 'none'
     logger.info('Synced %s global slash commands: %s', len(synced), command_names)
 
-    guild_sync_counts: dict[str, int] = {}
-    for guild in bot.guilds:
-        bot.tree.copy_global_to(guild=guild)
-        guild_synced = await bot.tree.sync(guild=guild)
-        guild_sync_counts[str(guild.id)] = len(guild_synced)
-        logger.info('Synced %s guild slash commands for %s (%s)', len(guild_synced), guild.name, guild.id)
-
     return {
         'global': len(synced),
-        'guilds': len(guild_sync_counts),
+        'guilds': 0,
     }
 
 
