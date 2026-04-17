@@ -8,7 +8,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'token': '',
     'bot': {
         'prefix': '!',
-        'version': '1.2.2',
+        'version': '1.2.3',
         'activity_type': 'watching',
         'activity_text': 'your commands',
         'status': 'online',

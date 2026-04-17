@@ -247,6 +247,12 @@ class BotLogging(commands.Cog):
         if entry.reason:
             embed.add_field(name='📝 Reason', value=self._truncate(entry.reason), inline=False)
 
+    def _member_timeout_until(self, member: discord.Member):
+        timeout_until = getattr(member, 'communication_disabled_until', None)
+        if timeout_until is not None:
+            return timeout_until
+        return getattr(member, 'timed_out_until', None)
+
     def _get_log_channel(self, guild: discord.Guild, key: str) -> Optional[discord.TextChannel]:
         self._load_config()
         self._ensure_logging_config()
@@ -529,7 +535,9 @@ class BotLogging(commands.Cog):
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         roles_changed = before.roles != after.roles
         nickname_changed = before.nick != after.nick
-        timeout_changed = before.communication_disabled_until != after.communication_disabled_until
+        before_timeout_until = self._member_timeout_until(before)
+        after_timeout_until = self._member_timeout_until(after)
+        timeout_changed = before_timeout_until != after_timeout_until
 
         if not roles_changed and not nickname_changed and not timeout_changed:
             return
@@ -569,8 +577,8 @@ class BotLogging(commands.Cog):
             embed.add_field(name='🏷️ Nickname', value=f'{before.display_name} -> {after.display_name}', inline=False)
 
         if timeout_changed:
-            before_timeout = self._safe_format_dt(before.communication_disabled_until)
-            after_timeout = self._safe_format_dt(after.communication_disabled_until)
+            before_timeout = self._safe_format_dt(before_timeout_until)
+            after_timeout = self._safe_format_dt(after_timeout_until)
             embed.add_field(name='⏱️ Timeout', value=f'{before_timeout} -> {after_timeout}', inline=False)
 
         self._add_audit_fields(embed, audit_entry)
