@@ -1,7 +1,6 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import json
 import logging
 from pathlib import Path
 
@@ -106,340 +105,22 @@ class Roster(commands.Cog):
 
         return None
 
-    @app_commands.command(name="roster", description="Display the server roster")
-    async def roster_slash(self, interaction: discord.Interaction):
-        """Display the roster"""
-        # Delete the command message (though slash commands don't create messages, this is for consistency)
+# ── Command Groups ────────────────────────────────────────────────────────
+    roster  = app_commands.Group(name="roster",  description="Roster management commands")
+    role    = app_commands.Group(name="role",    description="Manage roster roles",   parent=roster)
+    member  = app_commands.Group(name="member",  description="Manage roster members", parent=roster)
+    setup   = app_commands.Group(name="setup",   description="Configure roster settings", parent=roster)
+
+    # ── /roster show ──────────────────────────────────────────────────────────
+    @roster.command(name="show", description="Display the server roster")
+    async def roster_show(self, interaction: discord.Interaction):
         await self.display_roster_slash(interaction)
-    
-    @app_commands.command(name="roster_add", description="Add a role to the roster")
-    @app_commands.describe(role="The role to add to the roster")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def add_role_slash(self, interaction: discord.Interaction, role: discord.Role):
-        """Add a role to the roster"""
-        
-        current_roles = self.config['roster']['roles']
-        
-        if role.id in current_roles:
-            embed = discord.Embed(
-                title="⚠️ Role Already Added",
-                description=f"{role.mention} is already in the roster.",
-                color=discord.Color.orange()
-            )
-            await interaction.response.send_message(embed=embed)
-            return
-        
-        # Add role ID to the end
-        current_roles.append(role.id)
-        self.save_config()
-        
-        embed = discord.Embed(
-            title="✅ Role Added",
-            description=f"{role.mention} has been added to the roster.",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="Current Roster Order", value='\n'.join([f"{i+1}. {interaction.guild.get_role(r).name if interaction.guild.get_role(r) else 'Unknown Role'}" for i, r in enumerate(current_roles)]), inline=False)
-        await interaction.response.send_message(embed=embed)
-        logger.info(f"Role {role.name} ({role.id}) added to roster by {interaction.user} in {interaction.guild}")
-    
-    @app_commands.command(name="roster_remove", description="Remove a role from the roster")
-    @app_commands.describe(role="The role to remove from the roster")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def remove_role_slash(self, interaction: discord.Interaction, role: discord.Role):
-        """Remove a role from the roster"""
-        
-        current_roles = self.config['roster']['roles']
-        
-        if role.id not in current_roles:
-            embed = discord.Embed(
-                title="⚠️ Role Not Found",
-                description=f"{role.mention} is not in the roster.",
-                color=discord.Color.orange()
-            )
-            await interaction.response.send_message(embed=embed)
-            return
-        
-        current_roles.remove(role.id)
-        self.save_config()
-        
-        embed = discord.Embed(
-            title="✅ Role Removed",
-            description=f"{role.mention} has been removed from the roster.",
-            color=discord.Color.green()
-        )
-        if current_roles:
-            embed.add_field(name="Current Roster Order", value='\n'.join([f"{i+1}. {interaction.guild.get_role(r).name if interaction.guild.get_role(r) else 'Unknown Role'}" for i, r in enumerate(current_roles)]), inline=False)
-        else:
-            embed.add_field(name="Status", value="No roles in roster", inline=False)
-        await interaction.response.send_message(embed=embed)
-        logger.info(f"Role {role.name} ({role.id}) removed from roster by {interaction.user} in {interaction.guild}")
-    
-    @app_commands.command(name="roster_name", description="Set the roster display name")
-    @app_commands.describe(name="The new name for the roster")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_roster_name_slash(self, interaction: discord.Interaction, name: str):
-        """Set the roster display name"""
-        self.config['roster']['name'] = name.strip()
-        self.save_config()
 
-        embed = discord.Embed(
-            title="✅ Roster Name Set",
-            description=f"Roster display name has been updated to **{self.config['roster']['name']}**.",
-            color=discord.Color.green()
-        )
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="roster_list", description="List all roles in the roster")
-    async def list_roles_slash(self, interaction: discord.Interaction):
-        """List all roles in the roster"""
-        
-        current_roles = self.config['roster']['roles']
-        
-        if not current_roles:
-            embed = discord.Embed(
-                title="📋 Roster Roles",
-                description="No roles configured yet. Use `/roster_add` to add roles.",
-                color=discord.Color.blue()
-            )
-            await interaction.response.send_message(embed=embed)
-            return
-        
-        role_lines = []
-        for i, role_id in enumerate(current_roles):
-            role = interaction.guild.get_role(role_id)
-            role_name = role.name if role else f"Unknown Role ({role_id})"
-            role_lines.append(f"{i+1}. {role_name} ({role_id})")
-        
-        embed = discord.Embed(
-            title="📋 Roster Roles",
-            description='\n'.join(role_lines),
-            color=discord.Color.blue()
-        )
-        embed.add_field(name="Total Roles", value=len(current_roles), inline=False)
-        include_members = self.config['roster'].get('include_members', [])
-        exclude_members = self.config['roster'].get('exclude_members', [])
-        if include_members:
-            embed.add_field(name="Included Members", value=str(len(include_members)), inline=True)
-        if exclude_members:
-            embed.add_field(name="Excluded Members", value=str(len(exclude_members)), inline=True)
-        await interaction.response.send_message(embed=embed)
-    
-    @app_commands.command(name="roster_reorder", description="Reorder roster roles")
-    @app_commands.describe(roles="Comma-separated list of role IDs or mentions (e.g. 123456789, 987654321)")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def reorder_roles_slash(self, interaction: discord.Interaction, roles: str):
-        """Reorder roster roles"""
-        
-        # Parse the role identifiers
-        roles_input = [r.strip() for r in roles.split(',')]
-        
-        valid_roles = []
-        invalid_roles = []
-        
-        for role_input in roles_input:
-            if not role_input:
-                continue
-
-            role = None
-            if role_input.isdigit():
-                role = interaction.guild.get_role(int(role_input))
-            elif role_input.startswith('<@&') and role_input.endswith('>'):
-                role_id = role_input[3:-1]
-                if role_id.isdigit():
-                    role = interaction.guild.get_role(int(role_id))
-            if not role:
-                role = discord.utils.find(lambda r: r.name.lower() == role_input.lower(), interaction.guild.roles)
-
-            if role:
-                valid_roles.append(role.id)
-            else:
-                invalid_roles.append(role_input)
-        
-        if invalid_roles:
-            embed = discord.Embed(
-                title="⚠️ Invalid Roles",
-                description=f"The following roles don't exist:\n" + '\n'.join([f"• {r}" for r in invalid_roles]),
-                color=discord.Color.red()
-            )
-            await interaction.response.send_message(embed=embed)
-            return
-        
-        # Save configuration
-        self.config['roster']['roles'] = valid_roles
-        self.save_config()
-        
-        embed = discord.Embed(
-            title="✅ Roster Reordered",
-            description="Roster hierarchy reordered successfully!",
-            color=discord.Color.green()
-        )
-        roles_display = '\n'.join([f"{i+1}. {interaction.guild.get_role(role_id).name if interaction.guild.get_role(role_id) else 'Unknown Role'} ({role_id})" for i, role_id in enumerate(valid_roles)])
-        embed.add_field(name="New Order", value=roles_display, inline=False)
-        await interaction.response.send_message(embed=embed)
-        logger.info(f"Roster reordered by {interaction.user} in {interaction.guild}")
-
-    @app_commands.command(name="roster_exclude", description="Exclude a member from roster display")
-    @app_commands.describe(member="The member to exclude (ID or mention)")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def exclude_member_slash(self, interaction: discord.Interaction, member: str):
-        """Exclude a member from roster display by ID or mention."""
-        member_id = self._parse_member_id(member)
-        if member_id is None:
-            await interaction.response.send_message("Please provide a valid user ID or mention.")
-            return
-
-        member_obj = interaction.guild.get_member(member_id)
-        if member_obj is None:
-            await interaction.response.send_message("That member is not in this server.")
-            return
-
-        exclude_members = self.config['roster'].get('exclude_members', [])
-        include_members = self.config['roster'].get('include_members', [])
-
-        if member_id in exclude_members:
-            await interaction.response.send_message(f"{member_obj.mention} is already excluded from the roster.")
-            return
-
-        if member_id in include_members:
-            include_members.remove(member_id)
-
-        exclude_members.append(member_id)
-        self.config['roster']['exclude_members'] = exclude_members
-        self.config['roster']['include_members'] = include_members
-        self.save_config()
-
-        await interaction.response.send_message(f"{member_obj.mention} has been excluded from the roster.")
-
-    @app_commands.command(name="roster_include", description="Include a member in roster display")
-    @app_commands.describe(member="The member to include (ID or mention)")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def include_member_slash(self, interaction: discord.Interaction, member: str):
-        """Include an individual member in roster display by ID or mention."""
-        member_id = self._parse_member_id(member)
-        if member_id is None:
-            await interaction.response.send_message("Please provide a valid user ID or mention.")
-            return
-
-        member_obj = interaction.guild.get_member(member_id)
-        if member_obj is None:
-            await interaction.response.send_message("That member is not in this server.")
-            return
-
-        include_members = self.config['roster'].get('include_members', [])
-        exclude_members = self.config['roster'].get('exclude_members', [])
-
-        if member_id in include_members:
-            await interaction.response.send_message(f"{member_obj.mention} is already included in the roster.")
-            return
-
-        if member_id in exclude_members:
-            exclude_members.remove(member_id)
-
-        include_members.append(member_id)
-        self.config['roster']['include_members'] = include_members
-        self.config['roster']['exclude_members'] = exclude_members
-        self.save_config()
-
-        await interaction.response.send_message(f"{member_obj.mention} has been included in the roster.")
-
-    @app_commands.command(name="roster_setup", description="Set up a persistent roster message in a channel (Admin only)")
-    @app_commands.describe(channel="The channel to display the roster in")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def roster_setup_slash(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        # Check if user has admin permissions
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You need administrator permissions to use this command.", ephemeral=True)
-            return
-
-        await interaction.response.defer(ephemeral=True)
-
-        # Create the roster embed
-        embed = await self._create_roster_embed(interaction.guild)
-
-        # Send the message to the specified channel
-        try:
-            message = await channel.send(embed=embed)
-            
-            # Update config with channel and message IDs
-            self.config['roster']['display_channel'] = channel.id
-            self.config['roster']['roster_message_id'] = message.id
-            self.save_config()
-            
-            await interaction.followup.send(f"Persistent roster message set up in {channel.mention}. The roster will now auto-update when roles change.", ephemeral=True)
-            
-        except discord.Forbidden:
-            await interaction.followup.send("I don't have permission to send messages in that channel.", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
-
-    @app_commands.command(name="promotion_setup", description="Set up a channel for promotion announcements (Admin only)")
-    @app_commands.describe(channel="The channel to post promotion announcements in")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def promotion_setup_slash(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        # Check if user has admin permissions
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You need administrator permissions to use this command.", ephemeral=True)
-            return
-
-        # Defer the response since we might take time to save config
-        await interaction.response.defer(ephemeral=True)
-
-        # Update config with promotion channel
-        self.config['roster']['promotion_channel'] = channel.id
-        self.save_config()
-
-        await interaction.followup.send(f"Promotion announcements will now be posted in {channel.mention}. Members will be automatically announced when they receive roster roles.", ephemeral=True)
-
-    @app_commands.command(name="test_promotion", description="Test if promotion announcements work (Admin only)")
-    async def test_promotion_slash(self, interaction: discord.Interaction):
-        # Check if user has admin permissions
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You need administrator permissions to use this command.", ephemeral=True)
-            return
-
-        # Check if promotion channel is configured
-        promotion_channel_id = self.config['roster'].get('promotion_channel')
-        if not promotion_channel_id:
-            await interaction.response.send_message("Promotion channel not configured. Use `/promotion_setup` first.", ephemeral=True)
-            return
-
-        await interaction.response.defer(ephemeral=True)
-
-        try:
-            # Get the promotion channel
-            promo_channel = interaction.guild.get_channel(promotion_channel_id)
-            if not promo_channel:
-                await interaction.followup.send(f"Promotion channel with ID {promotion_channel_id} not found.", ephemeral=True)
-                return
-
-            # Check permissions
-            if not promo_channel.permissions_for(interaction.guild.me).send_messages:
-                await interaction.followup.send(f"I don't have permission to send messages in {promo_channel.mention}.", ephemeral=True)
-                return
-
-            # Send test message
-            embed = discord.Embed(
-                title="🧪 Test Promotion Announcement",
-                description="This is a test message to verify promotion announcements are working!",
-                color=discord.Color.blue(),
-                timestamp=discord.utils.utcnow()
-            )
-            embed.set_footer(text="Royal Family Test")
-
-            await promo_channel.send(embed=embed)
-            await interaction.followup.send(f"✅ Test message sent to {promo_channel.mention}!", ephemeral=True)
-
-        except Exception as e:
-            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
-
-    @app_commands.command(name="check_reaction", description="Show which roster members have not reacted to a message")
+    # ── /roster reactions ─────────────────────────────────────────────────────
+    @roster.command(name="reactions", description="Show roster members who have not reacted to a message")
     @app_commands.describe(message_id="The message ID to check reactions on")
     @app_commands.checks.has_permissions(administrator=True)
-    async def check_reaction_slash(
-        self,
-        interaction: discord.Interaction,
-        message_id: str,
-    ):
+    async def roster_reactions(self, interaction: discord.Interaction, message_id: str):
         if not message_id.strip().isdigit():
             await interaction.response.send_message("Please provide a valid message ID.", ephemeral=True)
             return
@@ -457,7 +138,7 @@ class Roster(commands.Cog):
                 reacted_user_ids.add(user.id)
 
         roster_members = self._get_roster_members(interaction.guild, exclude_priority_role=True)
-        missing_members = [member for member in roster_members if member.id not in reacted_user_ids]
+        missing_members = [m for m in roster_members if m.id not in reacted_user_ids]
 
         summary_embed = discord.Embed(
             title="📣 Roster Reaction Check",
@@ -477,12 +158,274 @@ class Roster(commands.Cog):
             return
 
         mention_chunks = [missing_members[i:i + 20] for i in range(0, len(missing_members), 20)]
-        first_chunk = ' '.join(member.mention for member in mention_chunks[0])
-        await interaction.followup.send(content=first_chunk, embed=summary_embed)
+        await interaction.followup.send(content=' '.join(m.mention for m in mention_chunks[0]), embed=summary_embed)
+        for chunk in mention_chunks[1:]:
+            await interaction.followup.send(content=' '.join(m.mention for m in chunk))
 
-        for chunk_members in mention_chunks[1:]:
-            mention_text = ' '.join(member.mention for member in chunk_members)
-            await interaction.followup.send(content=mention_text)
+    # ── /roster test ──────────────────────────────────────────────────────────
+    @roster.command(name="test", description="Test if promotion announcements are working")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def roster_test(self, interaction: discord.Interaction):
+        promotion_channel_id = self.config['roster'].get('promotion_channel')
+        if not promotion_channel_id:
+            await interaction.response.send_message(
+                "Promotion channel not configured. Use `/roster setup promotion` first.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        promo_channel = interaction.guild.get_channel(promotion_channel_id)
+        if not promo_channel:
+            await interaction.followup.send(f"Promotion channel with ID {promotion_channel_id} not found.", ephemeral=True)
+            return
+
+        if not promo_channel.permissions_for(interaction.guild.me).send_messages:
+            await interaction.followup.send(f"I don't have permission to send messages in {promo_channel.mention}.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="🧪 Test Promotion Announcement",
+            description="This is a test message to verify promotion announcements are working!",
+            color=discord.Color.blue(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed.set_footer(text="Royal Family Test")
+        await promo_channel.send(embed=embed)
+        await interaction.followup.send(f"✅ Test message sent to {promo_channel.mention}!", ephemeral=True)
+
+    # ── /roster role add ──────────────────────────────────────────────────────
+    @role.command(name="add", description="Add a role to the roster")
+    @app_commands.describe(role="The role to add to the roster")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def role_add(self, interaction: discord.Interaction, role: discord.Role):
+        current_roles = self.config['roster']['roles']
+        if role.id in current_roles:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="⚠️ Role Already Added",
+                description=f"{role.mention} is already in the roster.",
+                color=discord.Color.orange()
+            ))
+            return
+
+        current_roles.append(role.id)
+        self.save_config()
+
+        embed = discord.Embed(
+            title="✅ Role Added",
+            description=f"{role.mention} has been added to the roster.",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="Current Roster Order",
+            value='\n'.join([f"{i+1}. {interaction.guild.get_role(r).name if interaction.guild.get_role(r) else 'Unknown Role'}" for i, r in enumerate(current_roles)]),
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed)
+        logger.info(f"Role {role.name} ({role.id}) added to roster by {interaction.user} in {interaction.guild}")
+
+    # ── /roster role remove ───────────────────────────────────────────────────
+    @role.command(name="remove", description="Remove a role from the roster")
+    @app_commands.describe(role="The role to remove from the roster")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def role_remove(self, interaction: discord.Interaction, role: discord.Role):
+        current_roles = self.config['roster']['roles']
+        if role.id not in current_roles:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="⚠️ Role Not Found",
+                description=f"{role.mention} is not in the roster.",
+                color=discord.Color.orange()
+            ))
+            return
+
+        current_roles.remove(role.id)
+        self.save_config()
+
+        embed = discord.Embed(
+            title="✅ Role Removed",
+            description=f"{role.mention} has been removed from the roster.",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="Current Roster Order",
+            value='\n'.join([f"{i+1}. {interaction.guild.get_role(r).name if interaction.guild.get_role(r) else 'Unknown Role'}" for i, r in enumerate(current_roles)]) or "No roles in roster",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed)
+        logger.info(f"Role {role.name} ({role.id}) removed from roster by {interaction.user} in {interaction.guild}")
+
+    # ── /roster role list ─────────────────────────────────────────────────────
+    @role.command(name="list", description="List all roles in the roster")
+    async def role_list(self, interaction: discord.Interaction):
+        current_roles = self.config['roster']['roles']
+        if not current_roles:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="📋 Roster Roles",
+                description="No roles configured yet. Use `/roster role add` to add roles.",
+                color=discord.Color.blue()
+            ))
+            return
+
+        role_lines = []
+        for i, role_id in enumerate(current_roles):
+            r = interaction.guild.get_role(role_id)
+            role_lines.append(f"{i+1}. {r.name if r else f'Unknown Role'} (`{role_id}`)")
+
+        embed = discord.Embed(title="📋 Roster Roles", description='\n'.join(role_lines), color=discord.Color.blue())
+        embed.add_field(name="Total Roles", value=len(current_roles), inline=True)
+        include_count = len(self.config['roster'].get('include_members', []))
+        exclude_count = len(self.config['roster'].get('exclude_members', []))
+        if include_count:
+            embed.add_field(name="Included Members", value=str(include_count), inline=True)
+        if exclude_count:
+            embed.add_field(name="Excluded Members", value=str(exclude_count), inline=True)
+        await interaction.response.send_message(embed=embed)
+
+    # ── /roster role reorder ──────────────────────────────────────────────────
+    @role.command(name="reorder", description="Reorder roster roles")
+    @app_commands.describe(roles="Comma-separated role IDs or mentions in the desired order")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def role_reorder(self, interaction: discord.Interaction, roles: str):
+        roles_input = [r.strip() for r in roles.split(',')]
+        valid_roles, invalid_roles = [], []
+
+        for role_input in roles_input:
+            if not role_input:
+                continue
+            r = None
+            if role_input.isdigit():
+                r = interaction.guild.get_role(int(role_input))
+            elif role_input.startswith('<@&') and role_input.endswith('>'):
+                rid = role_input[3:-1]
+                if rid.isdigit():
+                    r = interaction.guild.get_role(int(rid))
+            if not r:
+                r = discord.utils.find(lambda x: x.name.lower() == role_input.lower(), interaction.guild.roles)
+            if r:
+                valid_roles.append(r.id)
+            else:
+                invalid_roles.append(role_input)
+
+        if invalid_roles:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="⚠️ Invalid Roles",
+                description="The following roles don't exist:\n" + '\n'.join(f"• {r}" for r in invalid_roles),
+                color=discord.Color.red()
+            ))
+            return
+
+        self.config['roster']['roles'] = valid_roles
+        self.save_config()
+
+        roles_display = '\n'.join([
+            f"{i+1}. {interaction.guild.get_role(rid).name if interaction.guild.get_role(rid) else 'Unknown Role'} (`{rid}`)"
+            for i, rid in enumerate(valid_roles)
+        ])
+        embed = discord.Embed(title="✅ Roster Reordered", description="Roster hierarchy reordered successfully!", color=discord.Color.green())
+        embed.add_field(name="New Order", value=roles_display, inline=False)
+        await interaction.response.send_message(embed=embed)
+        logger.info(f"Roster reordered by {interaction.user} in {interaction.guild}")
+
+    # ── /roster member include ────────────────────────────────────────────────
+    @member.command(name="include", description="Manually include a member in the roster")
+    @app_commands.describe(member="The member to include (mention or ID)")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def member_include(self, interaction: discord.Interaction, member: str):
+        member_id = self._parse_member_id(member)
+        if member_id is None:
+            await interaction.response.send_message("Please provide a valid user ID or mention.", ephemeral=True)
+            return
+
+        member_obj = interaction.guild.get_member(member_id)
+        if member_obj is None:
+            await interaction.response.send_message("That member is not in this server.", ephemeral=True)
+            return
+
+        include_members = self.config['roster'].get('include_members', [])
+        exclude_members = self.config['roster'].get('exclude_members', [])
+
+        if member_id in include_members:
+            await interaction.response.send_message(f"{member_obj.mention} is already included in the roster.")
+            return
+        if member_id in exclude_members:
+            exclude_members.remove(member_id)
+
+        include_members.append(member_id)
+        self.config['roster']['include_members'] = include_members
+        self.config['roster']['exclude_members'] = exclude_members
+        self.save_config()
+        await interaction.response.send_message(f"✅ {member_obj.mention} has been included in the roster.")
+
+    # ── /roster member exclude ────────────────────────────────────────────────
+    @member.command(name="exclude", description="Exclude a member from the roster")
+    @app_commands.describe(member="The member to exclude (mention or ID)")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def member_exclude(self, interaction: discord.Interaction, member: str):
+        member_id = self._parse_member_id(member)
+        if member_id is None:
+            await interaction.response.send_message("Please provide a valid user ID or mention.", ephemeral=True)
+            return
+
+        member_obj = interaction.guild.get_member(member_id)
+        if member_obj is None:
+            await interaction.response.send_message("That member is not in this server.", ephemeral=True)
+            return
+
+        exclude_members = self.config['roster'].get('exclude_members', [])
+        include_members = self.config['roster'].get('include_members', [])
+
+        if member_id in exclude_members:
+            await interaction.response.send_message(f"{member_obj.mention} is already excluded from the roster.")
+            return
+        if member_id in include_members:
+            include_members.remove(member_id)
+
+        exclude_members.append(member_id)
+        self.config['roster']['exclude_members'] = exclude_members
+        self.config['roster']['include_members'] = include_members
+        self.save_config()
+        await interaction.response.send_message(f"✅ {member_obj.mention} has been excluded from the roster.")
+
+    # ── /roster setup display ─────────────────────────────────────────────────
+    @setup.command(name="display", description="Set up a persistent auto-updating roster message in a channel")
+    @app_commands.describe(channel="The channel to display the roster in")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_display(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.defer(ephemeral=True)
+        embed = await self._create_roster_embed(interaction.guild)
+        try:
+            message = await channel.send(embed=embed)
+            self.config['roster']['display_channel'] = channel.id
+            self.config['roster']['roster_message_id'] = message.id
+            self.save_config()
+            await interaction.followup.send(f"✅ Persistent roster set up in {channel.mention}. It will auto-update when roles change.", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("I don't have permission to send messages in that channel.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+
+    # ── /roster setup promotion ───────────────────────────────────────────────
+    @setup.command(name="promotion", description="Set a channel for promotion announcements")
+    @app_commands.describe(channel="The channel to post promotion announcements in")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_promotion(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.defer(ephemeral=True)
+        self.config['roster']['promotion_channel'] = channel.id
+        self.save_config()
+        await interaction.followup.send(f"✅ Promotion announcements will now be posted in {channel.mention}.", ephemeral=True)
+
+    # ── /roster setup name ────────────────────────────────────────────────────
+    @setup.command(name="name", description="Set the roster display name")
+    @app_commands.describe(name="The new display name for the roster")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_name(self, interaction: discord.Interaction, name: str):
+        self.config['roster']['name'] = name.strip()
+        self.save_config()
+        await interaction.response.send_message(embed=discord.Embed(
+            title="✅ Roster Name Updated",
+            description=f"Roster display name set to **{self.config['roster']['name']}**.",
+            color=discord.Color.green()
+        ))
 
     async def _create_roster_embed(self, guild):
         """Create a roster embed for auto-updating."""

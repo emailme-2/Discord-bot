@@ -25,7 +25,7 @@ class Moderation(commands.Cog):
         if reason:
             embed.add_field(name="Reason", value=reason)
         await interaction.response.send_message(embed=embed)
-        logger.info(f'Kicked {member} from {interaction.guild}. Reason: {reason}')
+        logger.info('Kicked %s from %s. Reason: %s', member, interaction.guild, reason)
     
     @app_commands.command(name="ban", description="Ban a member from the server")
     @app_commands.describe(member="The member to ban", reason="Reason for banning (optional)")
@@ -41,7 +41,7 @@ class Moderation(commands.Cog):
         if reason:
             embed.add_field(name="Reason", value=reason)
         await interaction.response.send_message(embed=embed)
-        logger.info(f'Banned {member} from {interaction.guild}. Reason: {reason}')
+        logger.info('Banned %s from %s. Reason: %s', member, interaction.guild, reason)
     
     @app_commands.command(name="clear", description="Clear messages from the channel")
     @app_commands.describe(amount="Number of messages to delete (1-100, default 10)")

@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import os
 import sys
+import traceback
 from pathlib import Path
 
 # Python 3.13 removed audioop from stdlib; discord.py voice still imports it.
@@ -274,7 +276,6 @@ async def on_member_update(before, after):
                     
         except Exception as e:
             logger.error('Error posting promotion announcement: %s', e)
-            import traceback
             logger.error('Traceback: %s', traceback.format_exc())
 
 
@@ -294,5 +295,4 @@ if __name__ == '__main__':
         logger.error('Discord token not set. Configure DISCORD_TOKEN in environment variables for PebbleHost.')
         exit(1)
 
-    import asyncio
     asyncio.run(main())
