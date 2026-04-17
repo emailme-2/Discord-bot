@@ -5,6 +5,8 @@ import json
 import logging
 from pathlib import Path
 
+from modules.config import load_config, save_config
+
 logger = logging.getLogger(__name__)
 
 class Roster(commands.Cog):
@@ -17,13 +19,11 @@ class Roster(commands.Cog):
     
     def load_config(self):
         """Load configuration from file"""
-        with self.config_file.open('r', encoding='utf-8') as f:
-            self.config = json.load(f)
+        self.config = load_config(self.config_file)
 
     def save_config(self):
         """Save configuration to file"""
-        with self.config_file.open('w', encoding='utf-8') as f:
-            json.dump(self.config, f, indent=2)
+        save_config(self.config_file, self.config)
 
     def _parse_member_id(self, member_input: str):
         member_input = member_input.strip()

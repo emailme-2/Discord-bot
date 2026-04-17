@@ -9,6 +9,8 @@ from discord import app_commands
 from discord.ext import commands
 import logging
 
+from modules.config import load_config
+
 logger = logging.getLogger(__name__)
 CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config.json'
 
@@ -160,9 +162,8 @@ class Utility(commands.Cog):
 
     def _get_bot_version(self) -> str:
         try:
-            with CONFIG_PATH.open('r', encoding='utf-8') as config_file:
-                config = json.load(config_file)
-        except (OSError, json.JSONDecodeError):
+            config = load_config(CONFIG_PATH)
+        except OSError:
             return '1.0.0'
 
         return str(config.get('bot', {}).get('version') or '1.0.0')

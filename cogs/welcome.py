@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from modules.config import load_config, save_config
 from modules.welcome import generate_welcome_image
 
 logger = logging.getLogger(__name__)
@@ -21,12 +22,10 @@ class Welcome(commands.Cog):
         self.load_config()
 
     def load_config(self):
-        with self.config_file.open('r', encoding='utf-8') as f:
-            self.config = json.load(f)
+        self.config = load_config(self.config_file)
 
     def save_config(self):
-        with self.config_file.open('w', encoding='utf-8') as f:
-            json.dump(self.config, f, indent=2)
+        save_config(self.config_file, self.config)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

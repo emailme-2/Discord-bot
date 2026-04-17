@@ -17,6 +17,8 @@ except ModuleNotFoundError:
 import discord
 from discord.ext import commands
 
+from modules.config import load_config, save_config
+
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / 'config.json'
 LOG_DIR = BASE_DIR / 'logs'
@@ -27,15 +29,13 @@ RUNTIME_JSON_FILES = (
 )
 
 # Load config
-with CONFIG_PATH.open('r', encoding='utf-8') as f:
-    config = json.load(f)
+config = load_config(CONFIG_PATH)
 
 
 def reload_config():
     """Reload runtime configuration from disk."""
     global config
-    with CONFIG_PATH.open('r', encoding='utf-8') as f:
-        config = json.load(f)
+    config = load_config(CONFIG_PATH)
 
 
 def ensure_runtime_files():
@@ -135,8 +135,7 @@ async def update_roster_message(guild: discord.Guild, reason: str):
         logger.warning('Roster message or channel was deleted')
         config['roster']['display_channel'] = None
         config['roster']['roster_message_id'] = None
-        with CONFIG_PATH.open('w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4)
+        save_config(CONFIG_PATH, config)
     except Exception as e:
         logger.error('Error updating roster message: %s', e)
 

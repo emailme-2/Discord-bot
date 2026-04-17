@@ -8,6 +8,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from modules.config import load_config, save_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,12 +24,10 @@ class BotLogging(commands.Cog):
         self._ensure_logging_config()
 
     def _load_config(self):
-        with self.config_file.open('r', encoding='utf-8') as f:
-            self.config = json.load(f)
+        self.config = load_config(self.config_file)
 
     def _save_config(self):
-        with self.config_file.open('w', encoding='utf-8') as f:
-            json.dump(self.config, f, indent=2)
+        save_config(self.config_file, self.config)
 
     def _ensure_logging_config(self):
         changed = False
