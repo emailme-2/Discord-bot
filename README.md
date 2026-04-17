@@ -199,6 +199,25 @@ Edit `config.json` to customize:
 
 Logs are saved to `logs/bot.log` and also printed to the console.
 
+The logging cog also supports Discord channel-based audit logs. Set them with these slash commands:
+
+- `/set_chat_log_channel` for message edits/deletes and bulk delete logs
+- `/set_server_log_channel` for joins, leaves, kicks, bans, role changes, channel changes, thread changes, invite changes, server changes, and voice activity
+- `/set_leave_log_ping_role` to ping a role when roster members leave
+
+Current logging coverage includes:
+
+- Message edits, cached deletes, uncached deletes, cached bulk deletes, and uncached bulk deletes
+- Member joins, leaves, kicks, bans, unbans, role updates, nickname changes, and timeout changes
+- Voice joins, leaves, moderator disconnects, moderator moves, mute/deafen state changes, streaming, camera, and stage request updates
+- Channel create, update, and delete events
+- Role create, update, and delete events
+- Thread create, update, and delete events
+- Invite create and delete events
+- Server setting updates such as AFK/system/rules/update channel changes
+
+For moderator attribution like who deleted, moved, or disconnected someone, the bot must have the `View Audit Log` permission.
+
 ## Troubleshooting
 
 - **Bot won't start:** Check that `token` is set in `config.json` and is not the default placeholder

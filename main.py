@@ -51,6 +51,7 @@ if sys.version_info >= (3, 13):
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.voice_states = True
 
 bot = commands.Bot(
     command_prefix=config['bot'].get('prefix', '!'),

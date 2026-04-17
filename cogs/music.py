@@ -136,6 +136,7 @@ class Music(commands.Cog):
     async def start_track(self, guild: discord.Guild, track: Track):
         voice_client = guild.voice_client
         if not voice_client or not voice_client.is_connected():
+            logger.warning("Playback requested without an active voice client for guild %s", guild.id)
             return
 
         ffmpeg_path = self.get_ffmpeg_executable()
@@ -144,6 +145,13 @@ class Music(commands.Cog):
             return
 
         self.now_playing[guild.id] = track
+        logger.info(
+            "Starting track in guild %s: title=%r requester=%s channel=%s",
+            guild.id,
+            track.title,
+            track.requested_by_id,
+            getattr(voice_client.channel, 'id', None),
+        )
 
         source = discord.FFmpegPCMAudio(
             track.stream_url,
@@ -191,9 +199,11 @@ class Music(commands.Cog):
         queue = self.queues.get(guild_id, [])
         if not queue:
             self.now_playing.pop(guild_id, None)
+            logger.info("Queue finished for guild %s", guild_id)
             return
 
         next_track = queue.pop(0)
+        logger.info("Advancing queue in guild %s; remaining=%s", guild_id, len(queue))
         await self.start_track(guild, next_track)
 
     @app_commands.command(name="play", description="Play audio from YouTube")
@@ -218,13 +228,27 @@ class Music(commands.Cog):
 
         voice_channel = interaction.user.voice.channel
         voice_client = interaction.guild.voice_client
+        logger.info(
+            "Play requested in guild %s by user %s for query=%r target_voice_channel=%s",
+            interaction.guild.id,
+            interaction.user.id,
+            query,
+            voice_channel.id,
+        )
 
         for attempt in range(2):
             try:
                 voice_client = interaction.guild.voice_client
                 if voice_client and voice_client.channel != voice_channel:
+                    logger.info(
+                        "Moving bot voice client in guild %s from channel %s to %s",
+                        interaction.guild.id,
+                        getattr(voice_client.channel, 'id', None),
+                        voice_channel.id,
+                    )
                     await voice_client.move_to(voice_channel)
                 elif not voice_client:
+                    logger.info("Connecting bot voice client in guild %s to channel %s", interaction.guild.id, voice_channel.id)
                     voice_client = await voice_channel.connect(self_deaf=True, reconnect=False, timeout=12.0)
                 break
             except discord.errors.ConnectionClosed as error:
@@ -277,6 +301,7 @@ class Music(commands.Cog):
             return
 
         if not track:
+            logger.info("No playable result found in guild %s for query=%r", interaction.guild.id, query)
             await interaction.followup.send("No playable result found for that query.", ephemeral=True)
             return
 
@@ -287,6 +312,13 @@ class Music(commands.Cog):
 
         if voice_client and (voice_client.is_playing() or voice_client.is_paused()):
             queue.append(track)
+            logger.info(
+                "Queued track in guild %s: title=%r position=%s requester=%s",
+                interaction.guild.id,
+                track.title,
+                len(queue),
+                interaction.user.id,
+            )
             embed = discord.Embed(
                 title="Queued",
                 description=f"[{track.title}]({track.webpage_url})",
@@ -298,6 +330,7 @@ class Music(commands.Cog):
             return
 
         await self.start_track(interaction.guild, track)
+        logger.info("Immediate playback started in guild %s for title=%r", interaction.guild.id, track.title)
         await interaction.followup.send(f"Loading: {track.title}")
 
     @app_commands.command(name="skip", description="Skip the current track")
@@ -312,6 +345,13 @@ class Music(commands.Cog):
             await interaction.response.send_message("Nothing is currently playing.", ephemeral=True)
             return
 
+        current_track = self.now_playing.get(interaction.guild.id)
+        logger.info(
+            "Skip requested in guild %s by user %s for current_track=%r",
+            interaction.guild.id,
+            interaction.user.id,
+            current_track.title if current_track else None,
+        )
         voice_client.stop()
         await interaction.response.send_message("Skipped.")
 
@@ -334,6 +374,13 @@ class Music(commands.Cog):
         if voice_client.is_playing() or voice_client.is_paused():
             voice_client.stop()
 
+        logger.info(
+            "Stop requested in guild %s by user %s; clearing queue_length=%s and disconnecting from channel=%s",
+            interaction.guild.id,
+            interaction.user.id,
+            len(self.queues.get(guild_id, [])),
+            getattr(voice_client.channel, 'id', None),
+        )
         await voice_client.disconnect(force=True)
         await interaction.response.send_message("Stopped playback and disconnected.")
 
