@@ -52,7 +52,7 @@ python main.py
 Use these settings in PebbleHost to run the bot reliably:
 
 - Startup command: `python main.py`
-- Python version: 3.10+ recommended
+- Python version: `3.11` or `3.12` recommended
 - Install command: `pip install -r requirements.txt`
 - Environment variable: `DISCORD_TOKEN=your_real_bot_token`
 - Optional for YouTube on restricted IPs: `YTDLP_COOKIES_FILE=/home/container/cookies.txt`
@@ -63,10 +63,21 @@ Notes:
 - Keep `config.json` token empty or placeholder in production.
 - Make sure Privileged Gateway Intents are enabled in Discord Developer Portal (Message Content and Server Members), since this bot uses both.
 - Music commands require FFmpeg. If PebbleHost does not expose ffmpeg in PATH, set `FFMPEG_PATH` to your ffmpeg binary path.
-- If YouTube returns "Sign in to confirm you're not a bot", upload a `cookies.txt` file and set `YTDLP_COOKIES_FILE`.
+- Music can run without cookies, but if YouTube returns "Sign in to confirm you're not a bot", upload a `cookies.txt` file and set `YTDLP_COOKIES_FILE`.
+- If you upload `cookies.txt` directly into the bot folder, the bot will now auto-detect `cookies.txt` and `cookies.txt.txt` even without the env var.
 - Use Python 3.10 to 3.12 when possible.
 - Python 3.13 removes `audioop`; this project includes a fallback via `audioop-lts` for voice support.
 - If voice repeatedly fails with Discord close code `4006`, switch the server runtime to Python 3.11/3.12 and restart. On some low-cost hosts this can also indicate temporary voice networking limits.
+- The bot now auto-creates `giveaways.json` and `active_giveaways.json` if the host starts with a clean filesystem.
+- If Pillow fails to install or welcome image generation breaks, the welcome cog falls back to plain text instead of failing the whole bot.
+
+Recommended PebbleHost checklist:
+
+1. Set Python to `3.11` if available.
+2. Put the token in the `DISCORD_TOKEN` environment variable, not in `config.json`.
+3. Run `pip install -r requirements.txt` as the install command.
+4. If you use music, make sure FFmpeg is available and upload `cookies.txt` only if YouTube blocks playback.
+5. Restart the bot after changing slash commands, then use `!sync` if Discord still shows stale commands.
 
 ## Available Commands
 

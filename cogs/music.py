@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -13,6 +14,7 @@ import yt_dlp
 from yt_dlp.utils import DownloadError
 
 logger = logging.getLogger(__name__)
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 @dataclass
@@ -57,15 +59,32 @@ class Music(commands.Cog):
         if not self.get_ffmpeg_executable():
             return "Music is unavailable because FFmpeg is not installed. Add FFmpeg or set FFMPEG_PATH in PebbleHost."
 
-        if not self.get_cookies_file():
-            return "Music is unavailable because YouTube cookies are not configured. Upload cookies.txt and set YTDLP_COOKIES_FILE in PebbleHost."
+        return None
 
+    def _resolve_existing_path(self, raw_path: str) -> Optional[str]:
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            candidate = BASE_DIR / candidate
+        if candidate.exists():
+            return str(candidate)
         return None
 
     def get_cookies_file(self) -> Optional[str]:
         cookies_file = os.getenv("YTDLP_COOKIES_FILE", "").strip()
-        if cookies_file and os.path.exists(cookies_file):
-            return cookies_file
+        if cookies_file:
+            resolved = self._resolve_existing_path(cookies_file)
+            if resolved:
+                return resolved
+
+        fallback_paths = [
+            BASE_DIR / 'cookies.txt',
+            BASE_DIR / 'cookies.txt.txt',
+            Path('/home/container/cookies.txt'),
+        ]
+        for path in fallback_paths:
+            if path.exists():
+                return str(path)
+
         return None
 
     def is_supported_voice_runtime(self) -> bool:
@@ -90,6 +109,8 @@ class Music(commands.Cog):
         cookies_file = self.get_cookies_file()
         if cookies_file:
             options["cookiefile"] = cookies_file
+        else:
+            logger.info("No YouTube cookies file found; continuing without cookies.")
 
         return options
 

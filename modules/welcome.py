@@ -2,7 +2,12 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFont
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ModuleNotFoundError:
+    Image = None
+    ImageDraw = None
+    ImageFont = None
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CANVAS = ROOT / 'assets' / 'welcome_canvas.png'
@@ -10,6 +15,9 @@ DEFAULT_FONT = None
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
+    if ImageFont is None:
+        raise RuntimeError('Pillow is not installed')
+
     try:
         if DEFAULT_FONT and DEFAULT_FONT.exists():
             return ImageFont.truetype(str(DEFAULT_FONT), size)
@@ -26,6 +34,9 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
 
 
 def _get_text_width(text: str, font: ImageFont.ImageFont) -> int:
+    if Image is None or ImageDraw is None:
+        raise RuntimeError('Pillow is not installed')
+
     try:
         bbox = font.getbbox(text)
         return bbox[2] - bbox[0]
@@ -56,6 +67,9 @@ def _wrap_text(text: str, font: ImageFont.ImageFont, max_width: int) -> str:
 
 
 def generate_welcome_image(username: str, created_at, member_count: int, canvas_path: Optional[str] = None) -> BytesIO:
+    if Image is None or ImageDraw is None or ImageFont is None:
+        raise RuntimeError('Pillow is not installed')
+
     width, height = 1200, 625
     canvas = None
 

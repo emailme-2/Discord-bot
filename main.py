@@ -21,6 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / 'config.json'
 LOG_DIR = BASE_DIR / 'logs'
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+RUNTIME_JSON_FILES = (
+    BASE_DIR / 'giveaways.json',
+    BASE_DIR / 'active_giveaways.json',
+)
 
 # Load config
 with CONFIG_PATH.open('r', encoding='utf-8') as f:
@@ -33,6 +37,20 @@ def reload_config():
     with CONFIG_PATH.open('r', encoding='utf-8') as f:
         config = json.load(f)
 
+
+def ensure_runtime_files():
+    """Create runtime JSON files that hosted environments may not preserve by default."""
+    for file_path in RUNTIME_JSON_FILES:
+        if file_path.exists():
+            continue
+
+        try:
+            with file_path.open('w', encoding='utf-8') as runtime_file:
+                json.dump({}, runtime_file, indent=2)
+            logger.info('Created runtime data file: %s', file_path.name)
+        except OSError as error:
+            logger.warning('Failed to create runtime data file %s: %s', file_path.name, error)
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -43,6 +61,7 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+ensure_runtime_files()
 
 if sys.version_info >= (3, 13):
     logger.warning('Python 3.13+ detected. Discord voice/music is not reliable in this setup; use Python 3.11 or 3.12 on PebbleHost.')
